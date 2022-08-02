@@ -1,0 +1,321 @@
+---
+title: "DMA Coursework 2"
+output: html_notebook
+---
+# 1. Data Preprocessing
+```{r}
+library(lattice)
+library(ggplot2)
+library(tidyr)
+library(caret)
+library(factoextra)
+library(class)
+library(dplyr)
+library(ROSE)
+```
+## 1.1 Load Data
+```{r}
+raw_data=read.csv(file = "diabetes.csv",header = TRUE,sep = ",")
+sapply(raw_data, summary)
+sapply(raw_data,class)
+```
+## 1.2 Check duplicate value
+```{r}
+nrow(unique(raw_data))
+```
+
+## 1.3 Check if there is any missing data
+```{r}
+sapply(raw_data,FUN=function(x)nrow(is.na(x)))
+```
+
+
+## 1.4 Check the distribution of the data
+```{r}
+box=par(mfrow=c(1,2),mar=c(11,4,2,4))
+boxplot(raw_data[,-9],las=3,main="Boxplot of All features")
+boxplot(raw_data[,-c(5,9)],las=3,main="Boxplot of features without Insulin")
+```
+
+## 1.5 Handle the imbalanced
+### Undersampling
+```{r}
+table(raw_data$Outcome)
+```
+
+### Undersampling
+```{r}
+data.balanced.under=ovun.sample(Outcome~.,data=raw_data,method = "under",p=0.5,seed = 106)$data
+table(data.balanced.under$Outcome)
+```
+### Oversampling
+```{r}
+data.balanced.over=ovun.sample(Outcome~.,data=raw_data,method = "over",p=0.5,seed = 106)$data
+table(data.balanced.over$Outcome)
+```
+### Both undersampling and oversampling
+```{r}
+data.balanced.both=ovun.sample(Outcome~.,data=raw_data,method = "both",p=0.5,seed = 106)$data
+table(data.balanced.both$Outcome)
+```
+### Data Distribution of each dataset
+```{r}
+par(mfrow=c(1,4))
+h1<-hist(raw_data$Outcome,breaks = 2,col = c('#69b3a2','#404080'),xlab="Label", main = "Raw Data")
+text(h1$mids,h1$counts,labels=h1$counts, adj=c(0.5, -0.5))
+h2<-hist(data.balanced.under$Outcome,breaks =2,col = c('#69b3a2','#404080'),xlab="Label", main = "Under-sampling")
+text(h2$mids,h2$counts,labels=h2$counts, adj=c(0.5, -0.5))
+h3<-hist(data.balanced.over$Outcome,breaks = 2,col = c('#69b3a2','#404080'),xlab="Label", main = "Over-sampling")
+text(h3$mids,h3$counts,labels=h3$counts, adj=c(0.5, -0.5))
+h4<-hist(data.balanced.both$Outcome,breaks = 2,col = c('#69b3a2','#404080'),xlab="Label", main = "Both")
+text(h4$mids,h4$counts,labels=h4$counts, adj=c(0.5, -0.5))
+```
+
+## 1.6 Split Dataset
+```{r}
+set.seed(106)
+trainInd=createDataPartition(raw_data[,8],p=0.80,list = FALSE)
+training_set.raw=raw_data[trainInd,]
+testing_set.raw=raw_data[-trainInd,]
+
+trainInd=createDataPartition(data.balanced.under[,8],p=0.80,list = FALSE)
+training_set.under=data.balanced.under[trainInd,]
+testing_set.under=data.balanced.under[-trainInd,]
+
+trainInd=createDataPartition(data.balanced.over[,8],p=0.80,list = FALSE)
+training_set.over=data.balanced.over[trainInd,]
+testing_set.over=data.balanced.over[-trainInd,]
+
+trainInd=createDataPartition(data.balanced.both[,8],p=0.80,list = FALSE)
+training_set.both=data.balanced.both[trainInd,]
+testing_set.both=data.balanced.both[-trainInd,]
+```
+## 1.7 Standarlization
+```{r}
+training_set.raw[,1:8]=scale(training_set.raw[,1:8])
+testing_set.raw[,1:8]=scale(testing_set.raw[,1:8])
+
+training_set.under[,1:8]=scale(training_set.under[,1:8])
+testing_set.under[,1:8]=scale(testing_set.under[,1:8])
+
+training_set.over[,1:8]=scale(training_set.over[,1:8])
+testing_set.over[,1:8]=scale(testing_set.over[,1:8])
+
+training_set.both[,1:8]=scale(training_set.both[,1:8])
+testing_set.both[,1:8]=scale(testing_set.both[,1:8])
+
+x_train.raw=training_set.raw[,-9]
+y_train.raw=training_set.raw[,9]
+x_test.raw=testing_set.raw[,-9]
+y_test.raw=testing_set.raw[,9]
+
+x_train.under=training_set.under[,-9]
+y_train.under=training_set.under[,9]
+x_test.under=testing_set.under[,-9]
+y_test.under=testing_set.under[,9]
+
+x_train.over=training_set.over[,-9]
+y_train.over=training_set.over[,9]
+x_test.over=testing_set.over[,-9]
+y_test.over=testing_set.over[,9]
+
+x_train.both=training_set.both[,-9]
+y_train.both=training_set.both[,9]
+x_test.both=testing_set.both[,-9]
+y_test.both=testing_set.both[,9]
+```
+
+## 1.8 Calculate PCA
+```{r}
+pca.raw=prcomp(x_train.raw)
+summary(pca.raw)
+
+pca.under=prcomp(x_train.under)
+summary(pca.under)
+
+pca.over=prcomp(x_train.over)
+summary(pca.over)
+
+pca.both=prcomp(x_train.both)
+summary(pca.both)
+```
+```{r}
+library(ggpubr)
+
+p1=fviz_eig(pca.raw,addlabels = TRUE,ylim=c(0,40))+labs(title ="Raw Data PCA", y="% of variance")
+
+get_eig(pca.under)
+p2=fviz_eig(pca.under,addlabels = TRUE,ylim=c(0,40))+labs(title ="Under-sampling Data PCA", y="% of variance")
+
+get_eig(pca.over)
+p3=fviz_eig(pca.over,addlabels = TRUE,ylim=c(0,40))+labs(title ="Over-sampling Data PCA", y="% of variance")
+
+get_eig(pca.both)
+p4=fviz_eig(pca.both,addlabels = TRUE,ylim=c(0,40))+labs(title ='"Both" Sampling Data PCA', y="% of variance")
+ggarrange(p1,p2,p3,p4,labels ="auto" ,ncol = 2,nrow = 2)
+```
+```{r}
+x_train.raw=as.data.frame(predict(pca.raw,x_train.raw)[,1:6])
+x_test.raw=as.data.frame(predict(pca.raw,x_test.raw)[,1:6])
+
+x_train.under=as.data.frame(predict(pca.under,x_train.under)[,1:6])
+x_test.under=as.data.frame(predict(pca.under,x_test.under)[,1:6])
+
+x_train.over=as.data.frame(predict(pca.over,x_train.over)[,1:6])
+x_test.over=as.data.frame(predict(pca.over,x_test.over)[,1:6])
+
+x_train.both=as.data.frame(predict(pca.both,x_train.both)[,1:6])
+x_test.both=as.data.frame(predict(pca.both,x_test.both)[,1:6])
+```
+
+# 2.KNN
+
+```{r}
+plot_knn=function(x_train,y_train,x_test,y_test){
+  len=length(y_test)
+  knn_evaluation=matrix(0,len,5)
+  y_testInFactors=as.factor(y_test)
+  for (i in seq(1:len)) {
+  knn_fit=knn(train = x_train, test = x_test,cl=y_train,k=i)
+  confMatrix=confusionMatrix(as.factor(knn_fit),y_testInFactors)
+  knn_accuracy=as.numeric(confMatrix$overall[1])
+  knn_specificity=as.numeric(confMatrix$byClass[2])
+  knn_precision=as.numeric(confMatrix$byClass[5])
+  knn_recall=as.numeric(confMatrix$byClass[6])
+  knn_f1=as.numeric(confMatrix$byClass[7])
+  knn_evaluation[i,]=c(knn_accuracy,knn_precision,knn_recall,knn_specificity,knn_f1)
+  }
+  knn_evaluation=as.data.frame(knn_evaluation)
+  names(knn_evaluation)=c("Accuracy","Precision","Recall","Specificity","F1")
+  acc=ggplot(data = knn_evaluation,aes(x=seq(1,len),y=Accuracy))+geom_line(color="red")+scale_x_continuous(name = "K Nearst Neighbor",breaks = (seq(0,len,20)))+scale_y_continuous(name = "Accuracy",labels = scales::percent)+ggtitle(paste("Accuracy with k from 1 to",collapse = " ",len))+geom_text(aes(x=which.max(Accuracy),y=max(Accuracy), label=paste(format(round(max(Accuracy)*100,2), nsmall=2),"%","at k=",which.max(Accuracy)),fontface=c("italic")),hjust=-0.1)+geom_point(aes(x=which.max(Accuracy),y=max(Accuracy),),colour="blue")
+  
+  pre=ggplot(data = knn_evaluation,aes(x=seq(1,len),y=Precision))+geom_line(color="red")+scale_x_continuous(name = "K Nearst Neighbor",breaks = (seq(0,len,20)))+scale_y_continuous(name = "Precision",labels = scales::percent)+ggtitle(paste("Precision with k from 1 to",collapse = " ",len))+geom_text(aes(x=which.max(Precision),y=max(Precision), label=paste(format(round(max(Precision)*100,2), nsmall=2),"%","at k=",which.max(Precision)),fontface=c("italic")),hjust=-0.1)+geom_point(aes(x=which.max(Precision),y=max(Precision),),colour="blue")
+  
+  if(which.max(knn_evaluation$Recall)>50){
+      recall=ggplot(data = knn_evaluation,aes(x=seq(1,len),y=Recall))+geom_line(color="red")+scale_x_continuous(name = "K Nearst Neighbor",breaks = (seq(0,len,20)))+scale_y_continuous(name = "Recall",labels = scales::percent)+ggtitle(paste("Recall with k from 1 to",collapse = " ",len))+geom_text(aes(x=which.max(Recall),y=max(Recall), label=paste(format(round(max(Recall)*100,2), nsmall=2),"%","at k=",which.max(Recall)),fontface=c("italic")),hjust=1.1)+geom_point(aes(x=which.max(Recall),y=max(Recall),),colour="blue")
+
+  }else{
+      recall=ggplot(data = knn_evaluation,aes(x=seq(1,len),y=Recall))+geom_line(color="red")+scale_x_continuous(name = "K Nearst Neighbor",breaks = (seq(0,len,20)))+scale_y_continuous(name = "Recall",labels = scales::percent)+ggtitle(paste("Recall with k from 1 to",collapse = " ",len))+geom_text(aes(x=which.max(Recall),y=max(Recall), label=paste(format(round(max(Recall)*100,2), nsmall=2),"%","at k=",which.max(Recall)),fontface=c("italic")),hjust=-0.2)+geom_point(aes(x=which.max(Recall),y=max(Recall)),colour="blue")
+
+  }
+  speci=ggplot(data = knn_evaluation,aes(x=seq(1,len),y=Specificity))+geom_line(color="red")+scale_x_continuous(name = "K Nearst Neighbor",breaks = (seq(0,len,20)))
+  if(which.max(knn_evaluation$F1)>50){
+    f1=ggplot(data = knn_evaluation,aes(x=seq(1,len),y=F1))+geom_line(color="red")+scale_x_continuous(name = "K Nearst Neighbor",breaks = (seq(0,len,20)))+scale_y_continuous(name = "F1 Score",labels = scales::percent)+ggtitle(paste("F1 Score with k from 1 to",collapse = " ",len))+geom_text(aes(x=which.max(F1),y=max(F1), label=paste(format(round(max(F1)*100,2), nsmall=2),"%","at k=",which.max(F1)),fontface=c("italic")),hjust=1.1)+geom_point(aes(x=which.max(F1),y=max(F1)),colour="blue")
+  }
+  else{
+    f1=ggplot(data = knn_evaluation,aes(x=seq(1,len),y=F1))+geom_line(color="red")+scale_x_continuous(name = "K Nearst Neighbor",breaks = (seq(0,len,20)))+scale_y_continuous(name = "F1 Score",labels = scales::percent)+ggtitle(paste("F1 Score with k from 1 to",collapse = " ",len))+geom_text(aes(x=which.max(F1),y=max(F1), label=paste(format(round(max(F1)*100,2), nsmall=2),"%","at k=",which.max(F1)),fontface=c("italic")),hjust=-0.1)+geom_point(aes(x=which.max(F1),y=max(F1)),colour="blue")
+  }
+    #Uncomment to swith output
+    #return(acc);
+    #return(pre)
+    #return(recall)
+    #return(speci)
+    return(f1)
+}
+```
+
+# Uncomment return(acc) in chunk 16 and comment other return instructions, rerun chunk 16 then run the following 
+```{r}
+p1=plot_knn(x_train = x_train.raw,y_train = y_train.raw,x_test=x_test.raw,y_test = y_test.raw)
+p2=plot_knn(x_train = x_train.under,y_train = y_train.under,x_test=x_test.under,y_test = y_test.under)
+p3=plot_knn(x_train = x_train.over,y_train = y_train.over,x_test=x_test.over,y_test = y_test.over)
+p4=plot_knn(x_train = x_train.both,y_train = y_train.both,x_test=x_test.both,y_test = y_test.both)
+ggarrange(p1,p2,p3,p4,labels =c("Raw","Under","Over","Both") ,ncol = 2,nrow = 2,hjust = -0.2)
+```
+
+# Uncomment return(pre) in chunk 16 and comment other return instructions, rerun chunk 16 then run the following 
+```{r}
+p1=plot_knn(x_train = x_train.raw,y_train = y_train.raw,x_test=x_test.raw,y_test = y_test.raw)
+p2=plot_knn(x_train = x_train.under,y_train = y_train.under,x_test=x_test.under,y_test = y_test.under)
+p3=plot_knn(x_train = x_train.over,y_train = y_train.over,x_test=x_test.over,y_test = y_test.over)
+p4=plot_knn(x_train = x_train.both,y_train = y_train.both,x_test=x_test.both,y_test = y_test.both)
+ggarrange(p1,p2,p3,p4,labels =c("Raw","Under","Over","Both") ,ncol = 2,nrow = 2,hjust = -0.1)
+```
+
+# Uncomment return(recall) in chunk 16 and comment other return instructions, rerun chunk 16 then run the following
+```{r}
+p1=plot_knn(x_train = x_train.raw,y_train = y_train.raw,x_test=x_test.raw,y_test = y_test.raw)
+p2=plot_knn(x_train = x_train.under,y_train = y_train.under,x_test=x_test.under,y_test = y_test.under)
+p3=plot_knn(x_train = x_train.over,y_train = y_train.over,x_test=x_test.over,y_test = y_test.over)
+p4=plot_knn(x_train = x_train.both,y_train = y_train.both,x_test=x_test.both,y_test = y_test.both)
+ggarrange(p1,p2,p3,p4,labels =c("Raw","Under","Over","Both") ,ncol = 2,nrow = 2,hjust = -0.1)
+```
+
+# Uncomment return(f1) in chunk 16 and comment other return instructions, rerun chunk 16 then run the following
+```{r}
+p1=plot_knn(x_train = x_train.raw,y_train = y_train.raw,x_test=x_test.raw,y_test = y_test.raw)
+p2=plot_knn(x_train = x_train.under,y_train = y_train.under,x_test=x_test.under,y_test = y_test.under)
+p3=plot_knn(x_train = x_train.over,y_train = y_train.over,x_test=x_test.over,y_test = y_test.over)
+p4=plot_knn(x_train = x_train.both,y_train = y_train.both,x_test=x_test.both,y_test = y_test.both)
+ggarrange(p1,p2,p3,p4,labels =c("Raw","Under","Over","Both") ,ncol = 2,nrow = 2,hjust = -0.1)
+```
+
+# 3. rPart Model
+```{r}
+new_trainingset.raw=x_train.raw
+new_trainingset.raw$label=as.factor(y_train.raw)
+new_testingset.raw=x_test.raw
+new_testingset.raw$label=as.factor(y_test.raw)
+new_trainingset.under=x_train.under
+new_trainingset.under$label=as.factor(y_train.under)
+new_testingset.under=x_test.under
+new_testingset.under$label=as.factor(y_test.under)
+new_trainingset.over=x_train.over
+new_trainingset.over$label=as.factor(y_train.over)
+new_testingset.over=x_test.over
+new_testingset.over$label=as.factor(y_test.over)
+new_trainingset.both=x_train.both
+new_trainingset.both$label=as.factor(y_train.both)
+new_testingset.both=x_test.both
+new_testingset.both$label=as.factor(y_test.both)
+```
+
+```{r}
+library(rpart)
+rpart_mdl.raw=rpart(label~.,data=new_trainingset.raw,method='class')
+plot(rpart_mdl.raw)
+text(rpart_mdl.raw)
+rpart_mdl.under=rpart(label~.,data=new_trainingset.under,method='class')
+plot(rpart_mdl.under)
+text(rpart_mdl.under)
+rpart_mdl.over=rpart(label~.,data=new_trainingset.over,method='class')
+plot(rpart_mdl.over)
+text(rpart_mdl.over)
+rpart_mdl.both=rpart(label~.,data=new_trainingset.both,method='class')
+plot(rpart_mdl.both)
+text(rpart_mdl.both)
+```
+```{r}
+eval_rpart=function(y_pred,y_test){
+  rpart_evaluation=matrix(0,4,2)
+  conf=confusionMatrix(as.factor(y_pred),as.factor(y_test))
+  acc=as.numeric(conf$overall[1])
+  pre=as.numeric(conf$byClass[5])
+  rec=as.numeric(conf$byClass[6])
+  f1=as.numeric(conf$byClass[7])
+  rpart_evaluation=cbind(rbind(acc,pre,rec,f1),c("Accuracy","Precision","Recall","F1"))
+  return(rpart_evaluation)
+}
+```
+
+```{r}
+rpart_predict.raw=predict(rpart_mdl.raw,x_test.raw, type = 'class')
+rpart_evaluation=eval_rpart(rpart_predict.raw,y_test.raw)
+
+rpart_predict.under=predict(rpart_mdl.under,x_test.under, type = 'class')
+rpart_evaluation=rbind(rpart_evaluation,eval_rpart(rpart_predict.under,y_test.under))  
+
+rpart_predict.over=predict(rpart_mdl.over,x_test.over, type = 'class')
+rpart_evaluation=rbind(rpart_evaluation,eval_rpart(rpart_predict.over,y_test.over))
+
+rpart_predict.both=predict(rpart_mdl.both,x_test.both, type = 'class')
+rpart_evaluation=rbind(rpart_evaluation,eval_rpart(rpart_predict.both,y_test.both))
+
+rpart_evaluation=cbind(rpart_evaluation,c(rep("Raw",4),rep("Under",4),rep("Over",4),rep("Both",4)))
+
+rpart_evaluation=as.data.frame(rpart_evaluation)
+names(rpart_evaluation)=c("Value","Metric","Dataset")
+rpart_evaluation$dataset=c("Raw","Under","Over","Both")
+rpart_evaluation$Value=as.numeric(rpart_evaluation$Value)
+ggplot(data = rpart_evaluation, aes(fill=Dataset,x=Metric,y=Value))+geom_bar(position = "dodge",stat = "identity")+scale_y_continuous(name = "Percent",labels = scales::percent)
+```
